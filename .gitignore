@@ -1,0 +1,12 @@
+.env*
+node_modules
+*.rest
+*/buffer/*
+!buffer/.init
+# Ignore .idea files IntelliJ
+.idea/
+# Coverage directory used by tools like istanbul
+coverage
+*.lcov
+.scannerwork
+.DS_Store
