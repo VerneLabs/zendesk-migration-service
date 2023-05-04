@@ -15,20 +15,20 @@ module.exports = {
         file_data = fileHandle.getJson('execution.json');
 
 
-        const credentials = await zendesk.checkCredentials()
-        // const export_data = await zendesk.getTicketsExport("1587972143")
+        // const credentials = await zendesk.checkCredentials()
+        const export_data = await zendesk.getTicketsExport("1587972143")
         // console.log(export_data)
 
 
-        // const newIndex = export_data.next_page
-        // console.log('newIndex', newIndex)
+        const newIndex = export_data.next_page
+        console.log('newIndex', newIndex)
         // modificar el contador
 
 
 
 
 
-        return res.json({ "message": "dev request", credentials: credentials });
+        // return res.json({ "message": "dev request", credentials: credentials });
         return res.json({ "message": "dev request", file_data: file_data, export_data: export_data });
     },
     async main(req, res) {
