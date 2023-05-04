@@ -14,8 +14,10 @@ let axios = require('axios');
 const combination = `${process.env.USERNAME.split("/")[0]}/token:${process.env.TOKEN}`
 const combinationOld = `${process.env.USERNAME_OLD.split("/")[0]}/token:${process.env.TOKEN_OLD}`
 
-const tokenCurrent = btoa(combination)
-const tokenOld = btoa(combinationOld)
+const tokenCurrent = Buffer.from(combination).toString('base64')
+const tokenOld = Buffer.from(combinationOld).toString('base64')
+
+
 
 let client = zendesk.createClient({
     username: process.env.USERNAME.split("/")[0],
