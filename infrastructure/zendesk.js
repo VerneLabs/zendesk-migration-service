@@ -283,59 +283,59 @@ module.exports = {
             }
         })
     },
-    async validateIfTicketExist(id) {
-        try {
+    // async validateIfTicketExist(id) {
+    //     try {
 
-            const url = remoteUri + `/tickets.json?external_id=${id}`;
-            const response = await axios.get(url, {
-                headers: {
-                    'Authorization': 'Basic b3BlcmFjaW9uZXNAdmVybmVsYWJzLmN4L3Rva2VuOkRBOXZRMkdqMXY1YVowOEZvNUExZFN2WU1SNzZPUVJPM3hmMmRUQVE='
-                }
-            })
-            const rateLimit = response?.headers["rate-limit-remaining"]
-            if (rateLimit == 1) {
-                const rateLimitTimeout = response?.headers["rate-limit-reset"]
-                console.log("longtimout", rateLimitTimeout + 1)
-                this.timeout((rateLimitTimeout + 1) * 1000)
-            }
-            if (response?.data?.count === 0) return [false, false, false]
-            return [response?.data?.tickets[0].id, response?.data?.tickets[0].status, response?.data?.tickets[0]]
-        } catch (error) {
-            const response = error.response;
-            if (response?.status === 429 && response?.statusText === 'Too Many Requests') {
-                console.log("Cooldown")
-                await this.timeout(60000)
-                return this.validateIfTicketExist(id)
-            }
-        }
-    },
+    //         const url = remoteUri + `/tickets.json?external_id=${id}`;
+    //         const response = await axios.get(url, {
+    //             headers: {
+    //                 'Authorization': 'Basic b3BlcmFjaW9uZXNAdmVybmVsYWJzLmN4L3Rva2VuOkRBOXZRMkdqMXY1YVowOEZvNUExZFN2WU1SNzZPUVJPM3hmMmRUQVE='
+    //             }
+    //         })
+    //         const rateLimit = response?.headers["rate-limit-remaining"]
+    //         if (rateLimit == 1) {
+    //             const rateLimitTimeout = response?.headers["rate-limit-reset"]
+    //             console.log("longtimout", rateLimitTimeout + 1)
+    //             this.timeout((rateLimitTimeout + 1) * 1000)
+    //         }
+    //         if (response?.data?.count === 0) return [false, false, false]
+    //         return [response?.data?.tickets[0].id, response?.data?.tickets[0].status, response?.data?.tickets[0]]
+    //     } catch (error) {
+    //         const response = error.response;
+    //         if (response?.status === 429 && response?.statusText === 'Too Many Requests') {
+    //             console.log("Cooldown")
+    //             await this.timeout(60000)
+    //             return this.validateIfTicketExist(id)
+    //         }
+    //     }
+    // },
 
-    async validateIfTicketsExist(id) {
-        try {
+    // async validateIfTicketsExist(id) {
+    //     try {
 
-            const url = remoteUri + `/tickets/show_many.json?external_id=${id}`;
-            const response = await axios.get(url, {
-                headers: {
-                    'Authorization': 'Basic b3BlcmFjaW9uZXNAdmVybmVsYWJzLmN4L3Rva2VuOkRBOXZRMkdqMXY1YVowOEZvNUExZFN2WU1SNzZPUVJPM3hmMmRUQVE='
-                }
-            })
-            const rateLimit = response?.headers["rate-limit-remaining"]
-            if (rateLimit == 1) {
-                const rateLimitTimeout = response?.headers["rate-limit-reset"]
-                console.log("longtimout", rateLimitTimeout + 1)
-                this.timeout((rateLimitTimeout + 1) * 1000)
-            }
-            if (response?.data?.count === 0) return [false, false, false]
-            return [response?.data?.tickets[0].id, response?.data?.tickets[0].status, response?.data?.tickets[0]]
-        } catch (error) {
-            const response = error.response;
-            if (response?.status === 429 && response?.statusText === 'Too Many Requests') {
-                console.log("Cooldown")
-                await this.timeout(60000)
-                return this.validateIfTicketExist(id)
-            }
-        }
-    },
+    //         const url = remoteUri + `/tickets/show_many.json?external_id=${id}`;
+    //         const response = await axios.get(url, {
+    //             headers: {
+    //                 'Authorization': 'Basic b3BlcmFjaW9uZXNAdmVybmVsYWJzLmN4L3Rva2VuOkRBOXZRMkdqMXY1YVowOEZvNUExZFN2WU1SNzZPUVJPM3hmMmRUQVE='
+    //             }
+    //         })
+    //         const rateLimit = response?.headers["rate-limit-remaining"]
+    //         if (rateLimit == 1) {
+    //             const rateLimitTimeout = response?.headers["rate-limit-reset"]
+    //             console.log("longtimout", rateLimitTimeout + 1)
+    //             this.timeout((rateLimitTimeout + 1) * 1000)
+    //         }
+    //         if (response?.data?.count === 0) return [false, false, false]
+    //         return [response?.data?.tickets[0].id, response?.data?.tickets[0].status, response?.data?.tickets[0]]
+    //     } catch (error) {
+    //         const response = error.response;
+    //         if (response?.status === 429 && response?.statusText === 'Too Many Requests') {
+    //             console.log("Cooldown")
+    //             await this.timeout(60000)
+    //             return this.validateIfTicketExist(id)
+    //         }
+    //     }
+    // },
     bringOldUserFromInstance(id) {
         return clientOther.users.show(id)
     },
