@@ -12,8 +12,10 @@ app1.use(express.json())
 app1.use(cors());
 
 app1.use('/', defaultRoute)
-app1.use('/tickets', ticketsRoute)
+app1.use('/internal-api', defaultRoute)
 
+app1.use('/tickets', ticketsRoute)
+app1.use('/internal-api/tickets', ticketsRoute)
 
 app1.listen(PORT, () => console.log('server started, litening on port ' + PORT))
 
