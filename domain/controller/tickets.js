@@ -6,7 +6,7 @@ const fileHandle = require('./file');
 let conversations = [];
 
 const attachmentTempFolder = "./domain/buffer/tempAttachments"
-
+const allowNotNumbersInExternalId = true
 
 module.exports = {
     async dev(req, res) {
@@ -23,30 +23,53 @@ module.exports = {
         //luego de tener el index lo que hay que hacer es modificar el archivo fileData
 
 
-        const filtered = file_data.filter((ticket) => ticket.id == 4 || ticket.id == 5).map((ticket) => {
-            delete ticket.satisfaction_rating
-            return ticket
-        })
 
-        // const filtered = filterTicketByTagsAndExternalId(file_data)
+        let fileName = executionFile
 
-        if (filtered.length === 0) res.json({ "message": "No tickets to migrate" });
-        const difference = Number(file_data.length) - filtered.length
-        console.log("difference", difference)
-        //todo guardo archivo en este momento con difference y con datos a enviar
+        // console.log('file_data', file_data)
+        console.log("archivos a importar", file_data.tickets.length)
 
-        // const filteredWithComments = await this.fillAllTicketsWithComments(filtered)
-        // const final = await this.replaceAttachmentsWithTokens(filteredWithComments)
+        const job = await zendesk.createTickets(file_data)
+        console.log('job', job)
+
+
+        const response = await this.waitForStatusComplete(job)
+        // Cambiar este executionFile por nombre del archivo actual;
+        if (response === true) {
+            fileHandle.deleteFile(fileName)
+            return res.json({ "status": "ok" })
+        }
+        if (response === false) return res.json({ "status": "not ok" })
+
+        // debo hacer un filtrado de cual fue el que fallo y meterlo en una carpeta de errores
+
+        const failedFiles = file_data.tickets.map((ticket, index) => {
+            const error = response.find(error => error.pos === index);
+            if (error) {
+                ticket.error_jobStatus = error
+                return ticket
+            }
+        }).filter((element) => element != undefined)
+
+        fileHandle.createOrUpdateFile(fileName, JSON.stringify(failedFiles));
+
+        return res.json({ "status": "completed with errors" });
+
+
         let result
-        // result = await zendesk.createTicketsFetch(final)
-        // fileHandle.createOrUpdateFile("ticketsfiltrados.json", final)
-
-
         //todo termino job y agrego en difference el filtered.length y borro archivo de buffer
         return res.json({ "message": "dev request", "res": result });
     },
     async main(req, res) {
         return res.json({ "message": "you need to type the method" })
+    },
+    async init(req, res) {
+        let file_data = { "count": 0, "index": "", "done": 0, "prev_index": "" }
+        executionFile = 'execution.json';
+
+        // fileHandle.createOrUpdateFile(executionFile, JSON.stringify(file_data));
+        fileHandle.createFolder("tempAttachments")
+        return res.json({ "message": "all done, ready to execute" })
     },
     async count(req, res) {
         const executionFile = "execution.json"
@@ -73,10 +96,11 @@ module.exports = {
     filterTicketByTagsAndExternalId(tickets) {
         const tagsIncluded = ["duplicado", "live-migration", "live-migration-2"]
         const tickets_new = tickets.filter((ticket) => {
-            if (ticket.external_id) {
-                if (ticket.tags.includes(tagsIncluded[0]) || ticket.tags.includes(tagsIncluded[1]))
-                    return ticket;
-            }
+            if (ticket.external_id)
+                if (!isNaN(ticket.external_id) || allowNotNumbersInExternalId)
+                    if (ticket.tags.includes(tagsIncluded[0]) || ticket.tags.includes(tagsIncluded[1]))
+                        return ticket;
+
         })
 
         return tickets_new.map((ticket) => {
@@ -85,6 +109,28 @@ module.exports = {
         })
     },
 
+    async waitForStatusComplete(job, times = 0) {
+        const url = job.job_status.url
+        const response = await zendesk.request(url);
+        const job_status = response?.data?.job_status;
+        if (job_status.status === "completed") {
+            const results = job_status.results
+            const resultsWithIndex = results.map((result, index) => {
+                result.pos = index
+                return result
+            }).filter(result => {
+                if (result.status === "Error") return true;
+                if (result.error) return true;
+                return false
+            })
+            if (resultsWithIndex.length === 0) return true;
+            return resultsWithIndex;
+        }
+        if (times > 5) return false
+        await new Promise(resolve => setTimeout(resolve, 5000 * times));
+        return this.waitForStatusComplete(job, times + 1)
+
+    },
 
     async fillAllTicketsWithComments(tickets) {
         for (const ticketIndex in tickets) {
@@ -109,7 +155,6 @@ module.exports = {
             tickets[ticketIndex].comments = comments;
             //set solved at
             if (tickets[ticketIndex].status === "closed" || tickets[ticketIndex].status === "solved") {
-                const recentUpdate = comments.map(comment => comment.created_at)
                 const maxDate = new Date(
                     Math.max(
                         ...comments.map(element => {
@@ -119,7 +164,6 @@ module.exports = {
                 );
                 const maxDateString = maxDate.toISOString().replace(".000", "")
                 tickets[ticketIndex].solved_at = maxDateString;
-                console.log('fechas de los comentarios', recentUpdate, maxDateString)
             }
         }
         return tickets
@@ -173,12 +217,9 @@ module.exports = {
         const prev_index = export_data.after_cursor
         // const results = await this.fillAllTicketsWithComments(export_data.tickets)
         const results = export_data.tickets
-        const results_count = Number(export_data.tickets.length)
-        const newCount = results_count + file_data.count;
-
+        const results_count = Number(results.length)
+        const newCount = Number(results_count) + Number(file_data.count);
         const filtered = this.filterTicketByTagsAndExternalId(results)
-
-
 
         if (filtered.length === 0) {
             file_data = { ...file_data, count: newCount, index: newIndex, prev_index: prev_index, done: results_count + file_data.done };
@@ -188,12 +229,14 @@ module.exports = {
             //debo guardar todos los tickets que no fueron filtrados en el done
             const difference = Number(results.length) - filtered.length
             const newDone = Number(file_data.done) + difference
+
             file_data = { ...file_data, count: newCount, index: newIndex, prev_index: prev_index, done: newDone };
             fileHandle.createOrUpdateFile(executionFile, file_data)
         }
 
         // creo los datos dentro de la sección de tickets
-        fileHandle.createOrUpdateFile(`tickets-${prev_index}.json`, JSON.stringify(filtered))
+        const file_name = `tickets-${prev_index}.json`
+        fileHandle.createOrUpdateFile(file_name, JSON.stringify(filtered))
 
         const filteredWithComments = await this.fillAllTicketsWithComments(filtered)
         const final = await this.replaceAttachmentsWithTokens(filteredWithComments)
@@ -201,6 +244,29 @@ module.exports = {
         result = await zendesk.createTicketsFetch(final)
         // fileHandle.createOrUpdateFile("ticketsfiltrados.json", final)
 
+        const response = await this.waitForStatusComplete(result)
+        console.log('job status', response)
+
+        // Cambiar este executionFile por nombre del archivo actual;
+        if (response === true) {
+            fileHandle.deleteFile(file_name)
+            return res.json({ "status": "ok" })
+        }
+        if (response === false) return res.json({ "status": "not ok" })
+
+        // debo hacer un filtrado de cual fue el que fallo y meterlo en una carpeta de errores
+
+        const failedFiles = file_data.tickets.map((ticket, index) => {
+            const error = response.find(error => error.pos === index);
+            if (error) {
+                ticket.error_jobStatus = error
+                return ticket
+            }
+        }).filter((element) => element != undefined)
+
+        fileHandle.createOrUpdateFile(file_name, JSON.stringify(failedFiles));
+
+        return res.json({ "status": "completed with errors" });
 
 
 

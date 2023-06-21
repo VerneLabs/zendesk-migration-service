@@ -26,6 +26,15 @@ module.exports = {
             // file written successfully
         });
     }
-
+    , deleteFile(fileName) {
+        fs.unlink(BASIC_PATH + fileName, () => { console.log("file deleted properly") })
+    },
+    createFolder(folderName) {
+        const new_location = BASIC_PATH + folderName
+        fs.mkdir(new_location, () => { this.updatePermission(new_location) })
+    },
+    updatePermission(fileName) {
+        fs.chmod(fileName, 0o777, () => { })
+    }
 
 }

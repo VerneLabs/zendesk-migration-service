@@ -258,6 +258,7 @@ module.exports = {
         // return client.imports({ tickets: tickets })
 
 
+        return client.tickets.createMany(tickets)
         return client.tickets.createMany({ tickets: tickets })
         return client.imports("tickets", tickets)
         return client.ticketimport(tickets)

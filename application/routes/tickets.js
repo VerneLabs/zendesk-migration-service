@@ -15,6 +15,9 @@ router.all('/dev', async (req, res) => {
 router.all('/count', async (req, res) => {
     tickets.count(req, res)
 })
+router.all('/init', async (req, res) => {
+    tickets.init(req, res)
+})
 router.all('/', async (req, res) => {
     tickets.main(req, res)
 })
