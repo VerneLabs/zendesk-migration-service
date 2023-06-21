@@ -57,8 +57,30 @@ module.exports = {
         try {
             // incrementalInclude(startTime, includes, cb)        // New Export API supporing includes
             // incremental(startTime, cb)   
-            return await client.tickets.export(time);
-            // return await client.tickets.incremental(time);
+            // return await client.tickets.export(time);
+            return await client.tickets.incrementalInclude(time, "");
+            return await client.tickets.exportSample();
+        } catch (error) {
+            console.log("Error getTickets: ", error);
+            throw (new Error("there are no tickets to list"));
+        }
+    },
+    async getTicketsExportNew(url) {
+        if (SHOW_LOGS) console.log("getTicket- New")
+        if (url === undefined || url === null || url === "") url = remoteUri + "/incremental/tickets/cursor.json?start_time=1587972143&include=ticket_events"
+        try {
+            // incrementalInclude(startTime, includes, cb)        // New Export API supporing includes
+            // incremental(startTime, cb)   
+            // return await client.tickets.export(time);
+
+
+            return axios.get(url, {
+                headers: {
+                    'Authorization': `Basic ${tokenCurrent}`
+                }
+            }).then(res => res.data)
+
+            // return await client.tickets.incrementalInclude(time, "");
             return await client.tickets.exportSample();
         } catch (error) {
             console.log("Error getTickets: ", error);

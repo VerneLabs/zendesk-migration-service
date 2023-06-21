@@ -69,5 +69,8 @@ module.exports = {
                 return false
                 break;
         }
+    },
+    timeout(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
