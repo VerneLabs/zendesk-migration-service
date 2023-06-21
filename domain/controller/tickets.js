@@ -6,7 +6,7 @@ const fileHandle = require('./file');
 let conversations = [];
 
 const attachmentTempFolder = "./domain/buffer/tempAttachments"
-const allowNotNumbersInExternalId = true
+const allowNotNumbersInExternalId = false
 
 module.exports = {
     async dev(req, res) {
@@ -94,7 +94,7 @@ module.exports = {
         }
     },
     filterTicketByTagsAndExternalId(tickets) {
-        const tagsIncluded = ["duplicado", "live-migration", "live-migration-2"]
+        const tagsIncluded = ["live-migration", "live-migration-2"]
         const tickets_new = tickets.filter((ticket) => {
             if (ticket.external_id)
                 if (!isNaN(ticket.external_id) || allowNotNumbersInExternalId)
