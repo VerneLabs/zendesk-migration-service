@@ -374,7 +374,7 @@ module.exports = {
 
     getAttachment(url) {
         console.log('url', url)
-        return clientOther.attachments.show(url)
+        return client.attachments.show(url)
     },
 
     timeout(ms) {
@@ -392,10 +392,10 @@ module.exports = {
         fs.unlinkSync(newFileDirection)
         return uploadToken;
     }
-    , async migrateUpload(attachment, folder, waitForFile) {
+    , async migrateUpload(attachment, folder, cb = () => { }) {
         const downloadName = attachment.file_name;
         const id = attachment.id;
-        let cb;
+
         const newFileDirection = `${folder}/${id}`
         await this.download(attachment.content_url, newFileDirection, cb)
         try {

@@ -5,6 +5,7 @@ const zendesk = require('../../infrastructure/zendesk');
 const fileHandle = require('./file');
 let conversations = [];
 
+const attachmentTempFolder = "./domain/buffer/tempAttachments"
 
 
 module.exports = {
@@ -26,9 +27,15 @@ module.exports = {
             delete ticket.satisfaction_rating
             return ticket
         })
+        // const urlTest = "https://pdi-vrnlbs.zendesk.com/api/v2/attachments/8733043789460.json"
+        // const testing = await zendesk.getAttachment(urlTest)
+        // console.log('testing', testing)
+
+
         const filteredWithComments = await this.fillAllTicketsWithComments(filtered)
         const final = await this.replaceAttachmentsWithTokens(filteredWithComments)
-        const result = await zendesk.createTicketsFetch(final)
+        let result
+        result = await zendesk.createTicketsFetch(final)
         fileHandle.createOrUpdateFile("ticketsfiltrados.json", final)
         return res.json({ "message": "dev request", "res": result });
     },
@@ -90,31 +97,18 @@ module.exports = {
         return tickets
     },
     async replaceAttachmentsWithTokens(tickets) {
-        return tickets.map(ticket => {
-
-
-
-            ticket.comments = ticket.comments.map(comment => {
-
-
+        return await Promise.all(tickets.map(async ticket => {
+            ticket.comments = await Promise.all(ticket.comments.map(async (comment) => {
                 const attachments = comment.attachments;
-                console.log(attachments, "attachments")
-                const tokens = attachments.map((attachment) => {
-                    const url = attachment.content_url
-                    const firstPart = url.slice(url.indexOf("/token/")).replace("/token/", "")
-                    return firstPart.slice(0, firstPart.indexOf("/"))
-                })
+                const tokens = await Promise.all(attachments.map(async (attachment) => {
+                    const token = await zendesk.migrateUpload(attachment, attachmentTempFolder);
+                    return token
+                }))
                 comment.uploads = tokens;
                 return comment
-            })
-
-
-
-
-
-
+            }))
             return ticket
-        })
+        }))
     }
 
     ,
