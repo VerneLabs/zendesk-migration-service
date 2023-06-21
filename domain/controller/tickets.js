@@ -98,8 +98,10 @@ module.exports = {
         const tickets_new = tickets.filter((ticket) => {
             if (ticket.external_id)
                 if (!isNaN(ticket.external_id) || allowNotNumbersInExternalId)
-                    if (ticket.tags.includes(tagsIncluded[0]) || ticket.tags.includes(tagsIncluded[1]))
+                    if (ticket.tags.includes(tagsIncluded[0]) || ticket.tags.includes(tagsIncluded[1])) {
+                        ticket.tags.push("migration-fix")
                         return ticket;
+                    }
 
         })
 
