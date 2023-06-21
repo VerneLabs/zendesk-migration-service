@@ -17,7 +17,7 @@ module.exports = {
         try {
             file_data = fileHandle.getJson(executionFile);
         } catch (error) {
-            file_data = { "count": 0, "index": "", "prev_index": "" }
+            file_data = { "count": 0, "done": 0, "index": "", "prev_index": "" }
             fileHandle.createOrUpdateFile(executionFile, JSON.stringify(file_data));
         }
         //luego de tener el index lo que hay que hacer es modificar el archivo fileData
@@ -27,16 +27,22 @@ module.exports = {
             delete ticket.satisfaction_rating
             return ticket
         })
-        // const urlTest = "https://pdi-vrnlbs.zendesk.com/api/v2/attachments/8733043789460.json"
-        // const testing = await zendesk.getAttachment(urlTest)
-        // console.log('testing', testing)
 
+        // const filtered = filterTicketByTagsAndExternalId(file_data)
 
-        const filteredWithComments = await this.fillAllTicketsWithComments(filtered)
-        const final = await this.replaceAttachmentsWithTokens(filteredWithComments)
+        if (filtered.length === 0) res.json({ "message": "No tickets to migrate" });
+        const difference = Number(file_data.length) - filtered.length
+        console.log("difference", difference)
+        //todo guardo archivo en este momento con difference y con datos a enviar
+
+        // const filteredWithComments = await this.fillAllTicketsWithComments(filtered)
+        // const final = await this.replaceAttachmentsWithTokens(filteredWithComments)
         let result
-        result = await zendesk.createTicketsFetch(final)
-        fileHandle.createOrUpdateFile("ticketsfiltrados.json", final)
+        // result = await zendesk.createTicketsFetch(final)
+        // fileHandle.createOrUpdateFile("ticketsfiltrados.json", final)
+
+
+        //todo termino job y agrego en difference el filtered.length y borro archivo de buffer
         return res.json({ "message": "dev request", "res": result });
     },
     async main(req, res) {
@@ -47,9 +53,10 @@ module.exports = {
         try {
             file_data = fileHandle.getJson(executionFile);
             const count = file_data.count;
+            const done = file_data.done;
             if (isNaN(count))
                 return res.json({ message: "not count yet" });
-            return res.json({ count });
+            return res.json({ count, done, percentage: done * 100 / count });
         } catch (error) {
             return res.json({ message: "not count yet by error" });
         }
@@ -63,16 +70,23 @@ module.exports = {
             return null;
         }
     },
+    filterTicketByTagsAndExternalId(tickets) {
+        const tagsIncluded = ["duplicado", "live-migration", "live-migration-2"]
+        const tickets_new = tickets.filter((ticket) => {
+            if (ticket.external_id) {
+                if (ticket.tags.includes(tagsIncluded[0]) || ticket.tags.includes(tagsIncluded[1]))
+                    return ticket;
+            }
+        })
+
+        return tickets_new.map((ticket) => {
+            if (ticket?.satisfaction_rating?.score !== "good" && ticket?.satisfaction_rating?.score !== "bad") delete ticket.satisfaction_rating
+            return ticket
+        })
+    },
+
+
     async fillAllTicketsWithComments(tickets) {
-
-        //todo filter by external id
-        // const tickets_new = tickets.filter((ticket) => ticket.external_id)
-        // return tickets_new
-
-
-        // if (tickets_new.length == 0) return tickets
-        // tickets = tickets_new
-        //todo filter by external id
         for (const ticketIndex in tickets) {
             console.log(tickets[ticketIndex].id, tickets[ticketIndex].external_id)
             let ticket_id = tickets[ticketIndex].id;
@@ -93,6 +107,20 @@ module.exports = {
                 }
             }
             tickets[ticketIndex].comments = comments;
+            //set solved at
+            if (tickets[ticketIndex].status === "closed" || tickets[ticketIndex].status === "solved") {
+                const recentUpdate = comments.map(comment => comment.created_at)
+                const maxDate = new Date(
+                    Math.max(
+                        ...comments.map(element => {
+                            return new Date(element.created_at);
+                        }),
+                    ),
+                );
+                const maxDateString = maxDate.toISOString().replace(".000", "")
+                tickets[ticketIndex].solved_at = maxDateString;
+                console.log('fechas de los comentarios', recentUpdate, maxDateString)
+            }
         }
         return tickets
     },
@@ -120,7 +148,7 @@ module.exports = {
         try {
             file_data = fileHandle.getJson(executionFile);
         } catch (error) {
-            file_data = { "count": 0, "index": "", "prev_index": "" }
+            file_data = { "count": 0, "index": "", "done": 0, "prev_index": "" }
             fileHandle.createOrUpdateFile(executionFile, JSON.stringify(file_data));
         }
         //luego de tener el index lo que hay que hacer es modificar el archivo fileData
@@ -143,17 +171,44 @@ module.exports = {
         //seteamos variables para guardado de datos
         const newIndex = export_data.after_url
         const prev_index = export_data.after_cursor
-        const results = await this.fillAllTicketsWithComments(export_data.tickets)
+        // const results = await this.fillAllTicketsWithComments(export_data.tickets)
+        const results = export_data.tickets
         const results_count = Number(export_data.tickets.length)
         const newCount = results_count + file_data.count;
 
+        const filtered = this.filterTicketByTagsAndExternalId(results)
+
+
+
+        if (filtered.length === 0) {
+            file_data = { ...file_data, count: newCount, index: newIndex, prev_index: prev_index, done: results_count + file_data.done };
+            fileHandle.createOrUpdateFile(executionFile, file_data)
+            res.json({ "message": "No tickets to migrate" });
+        } else {
+            //debo guardar todos los tickets que no fueron filtrados en el done
+            const difference = Number(results.length) - filtered.length
+            const newDone = Number(file_data.done) + difference
+            file_data = { ...file_data, count: newCount, index: newIndex, prev_index: prev_index, done: newDone };
+            fileHandle.createOrUpdateFile(executionFile, file_data)
+        }
 
         // creo los datos dentro de la sección de tickets
-        fileHandle.createOrUpdateFile(`tickets-${prev_index}.json`, JSON.stringify(results))
-        // modifico todos los createOrUpdate
-        file_data = { ...file_data, count: newCount, index: newIndex, prev_index: prev_index };
-        fileHandle.createOrUpdateFile(executionFile, file_data)
-        return res.json({ "message": "export" })
+        fileHandle.createOrUpdateFile(`tickets-${prev_index}.json`, JSON.stringify(filtered))
+
+        const filteredWithComments = await this.fillAllTicketsWithComments(filtered)
+        const final = await this.replaceAttachmentsWithTokens(filteredWithComments)
+        let result
+        result = await zendesk.createTicketsFetch(final)
+        // fileHandle.createOrUpdateFile("ticketsfiltrados.json", final)
+
+
+
+
+
+
+
+
+        return res.json({ "message": "export", result })
     },
 
 
