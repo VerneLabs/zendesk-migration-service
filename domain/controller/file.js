@@ -35,6 +35,19 @@ module.exports = {
     },
     updatePermission(fileName) {
         fs.chmod(fileName, 0o777, () => { })
-    }
+    },
+    async getAllFilesInFolder(folderName = "") {
+        const all = await this.getAllFilesAndFoldersInFolder(folderName)
+        return all.filter(file => {
+            if (!file.includes(".")) return false
+            if (file[0] === ".") return false
+            return true
+        })
+    },
+    async getAllFilesAndFoldersInFolder(folderName = "") {
+        return fs.readdirSync(BASIC_PATH + folderName, function (err, files) {
+            return files;
+        })
 
+    }
 }

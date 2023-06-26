@@ -255,10 +255,10 @@ module.exports = {
     },
     async createTickets(tickets) {
         // return client.tickets.createMany(tickets)
-        // return client.imports({ tickets: tickets })
-
-
+        return client.imports({ tickets: tickets })
         return client.tickets.createMany(tickets)
+
+
         return client.tickets.createMany({ tickets: tickets })
         return client.imports("tickets", tickets)
         return client.ticketimport(tickets)
@@ -365,6 +365,17 @@ module.exports = {
     createUserInNewInstance(user) {
         console.log('user', JSON.stringify(user))
         return client.users.create(user)
+    },
+    async countTickets() {
+        const url = remoteUri + "/tickets/count";
+        let allTicketsCount = await axios.get(url, {
+            headers: {
+                'Authorization': `Basic ${tokenCurrent}`
+                , 'Content-Type': 'application/json',
+            },
+
+        })
+        return allTicketsCount?.data?.count?.value
     },
     newInstanceMe() {
         return client.users.me()
