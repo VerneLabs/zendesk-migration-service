@@ -6,15 +6,15 @@ const fileHandle = require('./file');
 let conversations = [];
 
 const attachmentTempFolder = "./domain/buffer/tempAttachments"
-const allowNotNumbersInExternalId = true
-const removeTagsFilter = true
+const allowNotNumbersInExternalId = false
+const removeTagsFilter = false
 const deleteDescription = true;
 
 
 module.exports = {
     async dev(req, res) {
-        // await this.searchForSpecificTicket(10)
-        // await new Promise(resolve => setTimeout(resolve, 1000));
+        await this.searchForSpecificTicket(10)
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         const executionFile = "found.json"
         const result = await this.createOnlySelectedFilesOfTickets(executionFile)
@@ -189,6 +189,7 @@ module.exports = {
     },
 
     async waitForStatusComplete(job, times = 0) {
+        if (!(job?.status?.url)) return false
         const url = job.job_status.url
         const response = await zendesk.request(url);
         const job_status = response?.data?.job_status;
@@ -231,6 +232,14 @@ module.exports = {
                     return res.json({ "message": "error in comments" })
                 }
             }
+            //validate in comments that are not system comments
+            const final_comments = comments.map(comment => {
+                if (comment.author_id < 0) delete comment.author_id
+                return comment
+            })
+
+
+            tickets[ticketIndex].comments = final_comments;
             tickets[ticketIndex].comments = comments;
             if (deleteDescription) delete tickets[ticketIndex].description
             //set solved at
@@ -262,10 +271,22 @@ module.exports = {
             }))
             return ticket
         }))
-    }
-
-    ,
+    },
     async export(req, res) {
+        const resp = await this.execution();
+        if (resp.error === true) res.status(500).json({ message: resp.message })
+        res.json({ message: resp.message })
+    }
+    ,
+    async fullMigrate(req, res) {
+        const resp = await this.execution();
+        if (resp.error === true) res.status(500).json({ message: resp.message })
+        if (resp.message === "Ended request") return res.json({ "status": "full migrate route" })
+        console.log(resp.message)
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return this.fullMigrate(req, res)
+    },
+    async exportOld(req, res) {
         //get or init credentials
         let file_data;
         executionFile = 'execution.json';
@@ -368,9 +389,110 @@ module.exports = {
         return res.json({ "status": "not ok" })
 
     },
-    fullMigrate(req, res) {
-        return res.json({ "status": "full migrate route" })
+    async execution() {
+        //get or init credentials
+        let file_data;
+        executionFile = 'execution.json';
+        //se valida que exista archivo execution
+        try {
+            file_data = fileHandle.getJson(executionFile);
+        } catch (error) {
+            file_data = { "count": 0, "index": "", "done": 0, "prev_index": "" }
+            fileHandle.createOrUpdateFile(executionFile, JSON.stringify(file_data));
+        }
+        //luego de tener el index lo que hay que hacer es modificar el archivo fileData
+        const url = file_data.index;
+        // validamos el index para saber si ya termino el proceso
+        if (url === "END") return ({ "message": "Ended request" });
+        let export_data;
+        // intentamos obtener los tickets, en el caso de que no devuelva se termina, si devuelve seguimos el proceso
+        let error_message = null;
+        try {
+            // export_data = await zendesk.getTicketsExport(url)
+            export_data = await zendesk.getTicketsExportNew(url)
+            if (export_data.end_of_stream === true)
+                fileHandle.createOrUpdateFile(executionFile, { ...file_data, "index": "END" });
+        } catch (error) {
+            if (error.message !== "there are no tickets to list") return error_message = error.message
+            if (error.message === "Zendesk rate limits 200 requests per minute") return error_message = "rate limit"
+            fileHandle.createOrUpdateFile(executionFile, { ...file_data, "index": "END" });
+            return ({ "message": "Just Ended" });
+        }
+        if (error_message) return ({ message: error_message, error: true })
+
+        //seteamos variables para guardado de datos
+        const newIndex = export_data.after_url
+        const prev_index = export_data.after_cursor
+        // const results = await this.fillAllTicketsWithComments(export_data.tickets)
+        const results = export_data.tickets
+        const results_count = Number(results.length)
+        const newCount = Number(results_count) + Number(file_data.count);
+        const filtered = this.filterTicketByTagsAndExternalId(results)
+
+
+        if (filtered.length === 0) {
+            file_data = { ...file_data, count: newCount, index: newIndex, prev_index: prev_index, done: results_count + file_data.done };
+            fileHandle.createOrUpdateFile(executionFile, file_data)
+            return ({ "message": "No tickets to migrate" });
+        } else {
+            //debo guardar todos los tickets que no fueron filtrados en el done
+            const difference = Number(results.length) - filtered.length
+            const newDone = Number(file_data.done) + difference
+
+            file_data = { ...file_data, count: newCount, index: newIndex, prev_index: prev_index, done: newDone };
+            fileHandle.createOrUpdateFile(executionFile, file_data)
+        }
+
+        // creo los datos dentro de la sección de tickets
+        const file_name = `tickets-${prev_index}.json`
+        fileHandle.createOrUpdateFile(file_name, JSON.stringify(filtered))
+
+        const filteredWithComments = await this.fillAllTicketsWithComments(filtered)
+        const final = await this.replaceAttachmentsWithTokens(filteredWithComments)
+
+
+        const maxValuesPossibles = 100;
+        const arrays = this.chunkArray(final, maxValuesPossibles)
+        const jobs = await Promise.all(arrays.map(async tickets => {
+            return {
+                tickets, execution: await zendesk.createTicketsFetch(
+                    tickets)
+            }
+        }))
+        //filtering in case there is an error in the execution and the job was not created
+        const responses = await Promise.all(jobs.filter(job => job !== false).map(async job => {
+            return { tickets: job.tickets, result: await this.waitForStatusComplete(job.execution) }
+        }))
+        let ticketsWithErrors = []
+
+        responses.forEach((responseObj) => {
+            const response = responseObj.result;
+            //when the complete file is not good
+            if (response === false) return ticketsWithErrors.push(...responseObj.tickets)
+            //when have punctual errors in the job and you want to filter them
+            if (response !== true) {
+                const failedFiles = responseObj.tickets.map((ticket, index) => {
+                    const error = response.find(error => error.pos === index);
+                    if (error) {
+                        ticket.error_jobStatus = error
+                        return ticket
+                    }
+                }).filter((element) => element != undefined)
+                ticketsWithErrors.push(...failedFiles)
+            }
+        });
+
+        //show the result of the operation
+        if (ticketsWithErrors.length === 0) {
+            fileHandle.deleteFile(file_name)
+            return ({ "message": "migrated all good" })
+        }
+        // console.log('ticketsWithErrors', ticketsWithErrors)
+        fileHandle.createOrUpdateFile(file_name, JSON.stringify(ticketsWithErrors));
+        return ({ "message": "migrated with some errors" })
+
     },
+
 
     async logAndTimeout(num) {
         console.log(num)
