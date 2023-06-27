@@ -368,6 +368,9 @@ module.exports = {
         return res.json({ "status": "not ok" })
 
     },
+    fullMigrate(req, res) {
+        return res.json({ "status": "full migrate route" })
+    },
 
     async logAndTimeout(num) {
         console.log(num)

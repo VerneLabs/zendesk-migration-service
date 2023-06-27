@@ -9,6 +9,9 @@ let tickets = require('../../domain/controller/tickets');
 router.post('/export', async (req, res) => {
     tickets.export(req, res)
 })
+router.post('/full-migrate', async (req, res) => {
+    tickets.fullMigrate(req, res)
+})
 router.all('/dev', async (req, res) => {
     tickets.dev(req, res)
 })
