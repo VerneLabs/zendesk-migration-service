@@ -254,31 +254,24 @@ module.exports = {
 
     },
     async createTickets(tickets) {
-        // return client.tickets.createMany(tickets)
-        return client.imports({ tickets: tickets })
-        return client.tickets.createMany(tickets)
-
-
+        //this is a create many tickets, not an import!
         return client.tickets.createMany({ tickets: tickets })
-        return client.imports("tickets", tickets)
-        return client.ticketimport(tickets)
     },
     async createTicketsFetch(tickets) {
-        let data = JSON.stringify({ tickets: tickets });
-        const url = remoteUri + "/imports/tickets/create_many";
-        let importTickets = await axios.post(url, data, {
-            headers: {
-                'Authorization': `Basic ${tokenCurrent}`
-                , 'Content-Type': 'application/json',
-            },
+        try {
+            let data = JSON.stringify({ tickets: tickets });
+            const url = remoteUri + "/imports/tickets/create_many";
+            let importTickets = await axios.post(url, data, {
+                headers: {
+                    'Authorization': `Basic ${tokenCurrent}`
+                    , 'Content-Type': 'application/json',
+                },
 
-        })
-        if (!importTickets.data.error) {
+            })
             return importTickets.data
-        } else {
-            console.log("existe mas de 1 valor");
-            console.log('importTickets', importTickets.data.error)
-
+        } catch (error) {
+            console.log("Zendesk createTicketFetch error", error)
+            return false
         }
     },
     async createTicketFetch(tickets) {
