@@ -6,8 +6,8 @@ const fileHandle = require('./file');
 let conversations = [];
 
 const attachmentTempFolder = "./domain/buffer/tempAttachments"
-const allowNotNumbersInExternalId = false
-const removeTagsFilter = false
+const allowNotNumbersInExternalId = true
+const removeTagsFilter = true
 const deleteDescription = true;
 
 
@@ -101,6 +101,7 @@ module.exports = {
 
         fileHandle.createOrUpdateFile(executionFile, JSON.stringify(file_data));
         fileHandle.createFolder("tempAttachments")
+        fileHandle.createFolder("idsToDelete")
         return res.json({ "message": "all done, ready to execute" })
     },
     async test(req, res) {
@@ -189,11 +190,11 @@ module.exports = {
     },
 
     async waitForStatusComplete(job, times = 0) {
-        if (!(job?.status?.url)) return false
         const url = job.job_status.url
         const response = await zendesk.request(url);
         const job_status = response?.data?.job_status;
         if (job_status.status === "completed") {
+            console.log("este es el jobsStatus", job_status)
             const results = job_status.results
             const resultsWithIndex = results.map((result, index) => {
                 result.pos = index
@@ -240,7 +241,8 @@ module.exports = {
 
 
             tickets[ticketIndex].comments = final_comments;
-            tickets[ticketIndex].comments = comments;
+            if (tickets[ticketIndex].group_id) delete tickets[ticketIndex].group_id
+
             if (deleteDescription) delete tickets[ticketIndex].description
             //set solved at
             if (tickets[ticketIndex].status === "closed" || tickets[ticketIndex].status === "solved") {
@@ -361,6 +363,7 @@ module.exports = {
             return { tickets: job.tickets, result: await this.waitForStatusComplete(job.execution) }
         }))
         let ticketsWithErrors = []
+        let ticketsDone = []
 
         responses.forEach((responseObj) => {
             const response = responseObj.result;
@@ -375,10 +378,18 @@ module.exports = {
                         return ticket
                     }
                 }).filter((element) => element != undefined)
+                const successfullySended = responseObj.tickets.map((ticket, index) => {
+                    const error = response.find(error => error.pos === index);
+                    if (!error) {
+                        return ticket.id
+                    }
+                }).filter((element) => element != undefined)
                 ticketsWithErrors.push(...failedFiles)
+                ticketsDone.push(...successfullySended)
             }
         });
-
+        console.log('tickets to delete', JSON.stringify(ticketsDone))
+        console.log('tickets to witherrors', JSON.stringify(ticketsWithErrors.length))
         //show the result of the operation
         if (ticketsWithErrors.length === 0) {
             fileHandle.deleteFile(file_name)
@@ -464,13 +475,21 @@ module.exports = {
             return { tickets: job.tickets, result: await this.waitForStatusComplete(job.execution) }
         }))
         let ticketsWithErrors = []
+        let ticketsDone = []
 
         responses.forEach((responseObj) => {
             const response = responseObj.result;
+            //filter all tickets that are executed propperly
+            const successfullySended = responseObj.tickets.map((ticket) => ticket.id)
+
             //when the complete file is not good
-            if (response === false) return ticketsWithErrors.push(...responseObj.tickets)
+            if (response === false) {
+                successfullySended = []
+                return ticketsWithErrors.push(...responseObj.tickets)
+            }
             //when have punctual errors in the job and you want to filter them
             if (response !== true) {
+
                 const failedFiles = responseObj.tickets.map((ticket, index) => {
                     const error = response.find(error => error.pos === index);
                     if (error) {
@@ -479,9 +498,17 @@ module.exports = {
                     }
                 }).filter((element) => element != undefined)
                 ticketsWithErrors.push(...failedFiles)
+                ///eliminate from successful the ones that are not
+                successfullySended.forEach(ticket => {
+                    const index = successfullySended.indexOf(ticket.id);
+                    if (index > -1) { // only splice array when item is found
+                        successfullySended.splice(index, 1); // 2nd parameter means remove one item only
+                    }
+                })
             }
+            ticketsDone.push(...successfullySended)
         });
-
+        if (ticketsDone.length > 0) fileHandle.createOrUpdateFile(`idsToDelete/ids-${prev_index}.json`, JSON.stringify(ticketsDone))
         //show the result of the operation
         if (ticketsWithErrors.length === 0) {
             fileHandle.deleteFile(file_name)
