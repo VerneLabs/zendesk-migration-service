@@ -6,8 +6,8 @@ const fileHandle = require('./file');
 let conversations = [];
 
 const attachmentTempFolder = "./domain/buffer/tempAttachments"
-const allowNotNumbersInExternalId = true
-const removeTagsFilter = true
+const allowNotNumbersInExternalId = false
+const removeTagsFilter = false
 const deleteDescription = true;
 
 
