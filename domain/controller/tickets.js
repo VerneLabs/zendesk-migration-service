@@ -265,8 +265,14 @@ module.exports = {
             ticket.comments = await Promise.all(ticket.comments.map(async (comment) => {
                 const attachments = comment.attachments;
                 const tokens = await Promise.all(attachments.map(async (attachment) => {
-                    const token = await zendesk.migrateUpload(attachment, attachmentTempFolder);
-                    return token
+                    try {
+                        const token = await zendesk.migrateUpload(attachment, attachmentTempFolder);
+                        return token
+                    } catch (error) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        const token = await zendesk.migrateUpload(attachment, attachmentTempFolder);
+                        return token
+                    }
                 }))
                 comment.uploads = tokens;
                 return comment
