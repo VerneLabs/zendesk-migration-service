@@ -114,7 +114,7 @@ module.exports = {
             upload_token = result.upload.token
             return upload_token
         } catch (error) {
-            console.log("Error uploadFile: ", error);
+            console.log("Error uploadFile: ");
             throw (new Error("Could not upload the pdf"));
         }
     },

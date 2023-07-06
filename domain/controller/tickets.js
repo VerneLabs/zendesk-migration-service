@@ -287,12 +287,17 @@ module.exports = {
     }
     ,
     async fullMigrate(req, res) {
-        const resp = await this.execution();
-        if (resp.error === true) res.status(500).json({ message: resp.message })
-        if (resp.message === "Ended request") return res.json({ "status": "full migrate route" })
-        console.log(resp.message)
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        return this.fullMigrate(req, res)
+        try {
+            const resp = await this.execution();
+            if (resp.error === true) res.status(500).json({ message: resp.message })
+            if (resp.message === "Ended request") return res.json({ "status": "full migrate route" })
+            console.log(resp.message)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (error) {
+            console.log("some error in full migrate route")
+        } finally {
+            return this.fullMigrate(req, res)
+        }
     },
     async exportOld(req, res) {
         //get or init credentials
